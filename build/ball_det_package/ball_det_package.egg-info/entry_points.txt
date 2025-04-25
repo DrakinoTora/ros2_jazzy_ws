@@ -1,0 +1,2 @@
+[console_scripts]
+ball_det_node = ball_det_package.ball_det_node:main

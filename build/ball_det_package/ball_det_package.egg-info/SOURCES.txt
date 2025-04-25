@@ -1,0 +1,14 @@
+package.xml
+setup.cfg
+setup.py
+ball_det_package/__init__.py
+ball_det_package/ball_det_node.py
+ball_det_package/sample3.mp4
+ball_det_package.egg-info/PKG-INFO
+ball_det_package.egg-info/SOURCES.txt
+ball_det_package.egg-info/dependency_links.txt
+ball_det_package.egg-info/entry_points.txt
+ball_det_package.egg-info/requires.txt
+ball_det_package.egg-info/top_level.txt
+ball_det_package.egg-info/zip-safe
+resource/ball_det_package
