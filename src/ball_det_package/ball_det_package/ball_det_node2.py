@@ -4,13 +4,14 @@ from std_msgs.msg import Float32
 import cv2
 import numpy as np
 import os
+from geometry_msgs.msg import Vector3
 from ament_index_python.packages import get_package_share_directory
 
 
 class BallDetectorNode(Node):
     def __init__(self):
         super().__init__('ball_detector_node')
-        self.publisher_ = self.create_publisher(Float32, 'ball_distance', 10)
+        self.publisher = self.create_publisher(Vector3, '/ball/relative', 10)
         self.timer = self.create_timer(0.1, self.detect_ball)
         
         video_path = os.path.join(
@@ -22,11 +23,6 @@ class BallDetectorNode(Node):
         if not self.cap.isOpened():
             self.get_logger().error('No Video Opened')
             rclpy.shutdown()
-
-    def publish_distance(self, distance):
-        msg = Float32()
-        msg.data = distance
-        self.publisher_.publish(msg)
 
     def ball(self, frame):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -78,22 +74,13 @@ class BallDetectorNode(Node):
                 break
         return top_orange, bot_orange
 
-    def detect_ball(self):
-        ret, frame = self.cap.read()
-        if not ret:
-            self.get_logger().info('Video ended')
-            rclpy.shutdown()
-            return
-
-        seg_field, mask_field = self.field(frame)
-        mask_ball = self.ball(seg_field)
-
+    def publish_ball(self, mask_ball, mask_field, frame):
         blurred = cv2.GaussianBlur(mask_ball, (9, 9), 2)
         circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1.2, 50, param1=50, param2=30, minRadius=1, maxRadius=1000)
 
         if circles is not None:
+            circles = np.uint16(np.around(circles))
             for i in circles[0, :]:
-                circles = np.uint16(np.around(circles))
                 x, y, r = circles[0, 0][:3]
                 stroke = int(1.1 * r)
 
@@ -152,29 +139,41 @@ class BallDetectorNode(Node):
                     else:
                         distance = (actual_diameter * focal_length) / detected_diameter
 
-                    msg = Float32()
-                    msg.data = float(distance)
-                    self.publisher_.publish(msg)
-                    self.get_logger().info(f'Distance: {distance:.2f} m')
+                    ball_position = Vector3()
+                    ball_position.x = float(x_new)
+                    ball_position.y = float(y_new)
+                    ball_position.z = float(distance)
+
+                    self.publisher.publish(ball_position)
+                    self.get_logger().info(f'Distance: {distance:.2f} x: {ball_position.x} y: {ball_position.y}')
                 else:
                     continue
 
                 break
+    
+    def detect_ball(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            self.get_logger().info('Video ended')
+            rclpy.shutdown()
+            return
+
+        seg_field, mask_field = self.field(frame)
+        mask_ball = self.ball(seg_field)
+
+        self.publish_ball(mask_ball, mask_field, frame)
 
 def main(args=None):
     rclpy.init(args=args)
     node = BallDetectorNode()
 
-    if not node.cap.isOpened():
-        node.get_logger().error("Video file could not be opened")
-        rclpy.shutdown()
-        return
+    while rclpy.ok():
+        node.detect_ball()
+        rclpy.spin_once(node)
 
-    rclpy.spin(node)
-    node.destroy_node()
+    node.cap.release()
     rclpy.shutdown()
 
 
 if __name__ == '__main__':
     main()
-
